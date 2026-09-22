@@ -1,0 +1,47 @@
+port_id,port_name,locode,lat,lon,coast,gateway
+USLAX,Los Angeles,USLAX,33.7290,-118.2620,west,true
+USLGB,Long Beach,USLGB,33.7550,-118.2160,west,true
+USOAK,Oakland,USOAK,37.7955,-122.3300,west,true
+USSEA,Seattle,USSEA,47.5950,-122.3500,west,true
+USTIW,Tacoma,USTIW,47.2660,-122.4200,west,true
+USPDX,Portland,USPDX,45.6390,-122.7700,west,false
+USSAN,San Diego,USSAN,32.6900,-117.1700,west,false
+USHUE,Port Hueneme,USHUE,34.1480,-119.2070,west,false
+USRCH,Richmond,USRCH,37.9200,-122.3700,west,false
+USSCK,Stockton,USSCK,37.9500,-121.3000,west,false
+USHNL,Honolulu,USHNL,21.3070,-157.8700,pacific,false
+USANC,Anchorage,USANC,61.2380,-149.8900,pacific,false
+USNYC,New York and New Jersey,USNYC,40.6700,-74.0500,east,true
+USPHL,Philadelphia,USPHL,39.9100,-75.1400,east,false
+USBAL,Baltimore,USBAL,39.2600,-76.5800,east,true
+USORF,Norfolk,USORF,36.9200,-76.3300,east,true
+USILM,Wilmington,USILM,34.2300,-77.9500,east,false
+USCHS,Charleston,USCHS,32.7900,-79.9250,east,true
+USSAV,Savannah,USSAV,32.0800,-81.1000,east,true
+USSSI,Brunswick,USSSI,31.1400,-81.5000,east,false
+USJAX,Jacksonville,USJAX,30.3900,-81.6100,east,false
+USPEF,Port Everglades,USPEF,26.0930,-80.1200,east,false
+USMIA,Miami,USMIA,25.7700,-80.1700,east,true
+USPBI,Palm Beach,USPBI,26.7700,-80.0500,east,false
+USBOS,Boston,USBOS,42.3500,-71.0300,east,false
+USCAP,Port Canaveral,USCAP,28.4100,-80.6200,east,false
+USHOU,Houston,USHOU,29.7300,-95.2700,gulf,true
+USGLS,Galveston,USGLS,29.3100,-94.7900,gulf,false
+USFPO,Freeport,USFPO,28.9450,-95.3100,gulf,false
+USCRP,Corpus Christi,USCRP,27.8140,-97.4000,gulf,false
+USBPT,Beaumont,USBPT,30.0700,-94.0900,gulf,false
+USPAT,Port Arthur,USPAT,29.8700,-93.9300,gulf,false
+USLCH,Lake Charles,USLCH,30.2200,-93.2200,gulf,false
+USMSY,New Orleans,USMSY,29.9400,-90.0900,gulf,true
+USBTR,Baton Rouge,USBTR,30.4400,-91.1900,gulf,false
+USGPT,Gulfport,USGPT,30.3600,-89.0900,gulf,false
+USMOB,Mobile,USMOB,30.6900,-88.0400,gulf,false
+USPNS,Pensacola,USPNS,30.4050,-87.2100,gulf,false
+USTPA,Tampa,USTPA,27.9400,-82.4500,gulf,false
+USPMT,Port Manatee,USPMT,27.6400,-82.5600,gulf,false
+PRSJU,San Juan,PRSJU,18.4400,-66.1100,east,false
+USCLE,Cleveland,USCLE,41.5100,-81.7000,lakes,false
+USDET,Detroit,USDET,42.3100,-83.0900,lakes,false
+USCHI,Chicago,USCHI,41.8500,-87.6100,lakes,false
+USTOL,Toledo,USTOL,41.6800,-83.5300,lakes,false
+USDLH,Duluth,USDLH,46.7600,-92.1000,lakes,false

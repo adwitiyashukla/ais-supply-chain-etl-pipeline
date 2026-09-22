@@ -1,0 +1,17 @@
+status_code,status_name
+0,under_way_using_engine
+1,at_anchor
+2,not_under_command
+3,restricted_maneuverability
+4,constrained_by_draught
+5,moored
+6,aground
+7,engaged_in_fishing
+8,under_way_sailing
+9,reserved_hsc
+10,reserved_wig
+11,power_driven_towing_astern
+12,power_driven_pushing_ahead
+13,reserved
+14,ais_sart
+15,undefined

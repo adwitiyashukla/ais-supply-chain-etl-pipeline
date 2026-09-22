@@ -1,0 +1,140 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest ruff
+      - name: lint
+        run: ruff check .
+      - name: tests
+        run: python -m pytest -q -p no:cacheprovider --deselect tests/test_dag.py
+
+  airflow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: dag tests
+        run: python -m pytest -q tests/test_dag.py
+      - name: run the dag end to end
+        env:
+          AIRFLOW_HOME: ${{ runner.temp }}/airflow
+          AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+          AIRFLOW__CORE__DAGS_FOLDER: ${{ github.workspace }}/dags
+          WAYBILL_CONFIG: ${{ runner.temp }}/ci.toml
+        run: |
+          python - <<'PY'
+          import os, pathlib, tomllib
+          raw = pathlib.Path("config.toml").read_text()
+          raw = raw.replace("vessels = 6000", "vessels = 60")
+          raw = raw.replace("days = 7", "days = 2")
+          raw = raw.replace("orders_per_day = 120000", "orders_per_day = 200")
+          raw = raw.replace('master = "local[*]"', 'master = "local[2]"')
+          raw = raw.replace('driver_memory = "4g"', 'driver_memory = "2g"')
+          raw = raw.replace("sample_days = 2", "sample_days = 1")
+          target = pathlib.Path(os.environ["WAYBILL_CONFIG"])
+          target.write_text(raw)
+          tomllib.loads(raw)
+          PY
+          airflow db migrate
+          airflow dags test waybill 2024-01-01
+
+  delta-interop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install delta-spark==4.0.0
+      - name: build a small lake
+        env:
+          WAYBILL_CONFIG: ${{ runner.temp }}/ci.toml
+        run: |
+          python - <<'PY'
+          import os, pathlib
+          raw = pathlib.Path("config.toml").read_text()
+          raw = raw.replace("vessels = 6000", "vessels = 60")
+          raw = raw.replace("days = 7", "days = 2")
+          raw = raw.replace("orders_per_day = 120000", "orders_per_day = 200")
+          raw = raw.replace('master = "local[*]"', 'master = "local[2]"')
+          raw = raw.replace('driver_memory = "4g"', 'driver_memory = "2g"')
+          raw = raw.replace("sample_days = 2", "sample_days = 1")
+          pathlib.Path(os.environ["WAYBILL_CONFIG"]).write_text(raw)
+          PY
+          python -m waybill.cli generate --config "$WAYBILL_CONFIG"
+          python -m waybill.cli pipeline --config "$WAYBILL_CONFIG"
+      - name: read the tables with the delta spark connector
+        env:
+          WAYBILL_CONFIG: ${{ runner.temp }}/ci.toml
+        run: |
+          python - <<'PY'
+          import os
+          from delta import configure_spark_with_delta_pip
+          from pyspark.sql import SparkSession
+          from waybill import delta
+          from waybill.config import Config
+          from waybill.ingest import bronze
+          from waybill.silver import portcalls, voyages
+          cfg = Config.load(os.environ["WAYBILL_CONFIG"])
+          builder = (
+              SparkSession.builder.master("local[2]")
+              .appName("delta-interop")
+              .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
+              .config(
+                  "spark.sql.catalog.spark_catalog",
+                  "org.apache.spark.sql.delta.catalog.DeltaCatalog",
+              )
+          )
+          spark = configure_spark_with_delta_pip(builder).getOrCreate()
+          for table in (bronze.PINGS, portcalls.CALLS, voyages.VOYAGES):
+              path = cfg.paths.table(*table)
+              native = spark.read.format("delta").load(path).count()
+              through_log = delta.row_count(path)
+              print(table[1], native, through_log, flush=True)
+              assert native == through_log, (table, native, through_log)
+              history = spark.sql("describe history delta.`" + path + "`").count()
+              assert history >= 1
+          spark.stop()
+          PY
