@@ -14,12 +14,12 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       - name: install
@@ -35,12 +35,12 @@ jobs:
   airflow:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - name: install
@@ -75,12 +75,12 @@ jobs:
   delta-interop:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
       - name: install
@@ -129,7 +129,7 @@ jobs:
           )
           spark = configure_spark_with_delta_pip(builder).getOrCreate()
           for table in (bronze.PINGS, portcalls.CALLS, voyages.VOYAGES):
-              path = cfg.paths.table(*table)
+              path = delta.normalize(cfg.paths.table(*table))
               native = spark.read.format("delta").load(path).count()
               through_log = delta.row_count(path)
               print(table[1], native, through_log, flush=True)
