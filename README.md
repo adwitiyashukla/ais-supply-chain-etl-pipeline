@@ -2,8 +2,6 @@
 
 aisetl is a big data ETL project for supply chain and logistics. It takes real ship tracking data (AIS) for US waters, turns 21.9 million position pings into port calls and voyages with Spark, and then uses the real port timing to drive a consumer goods order and shipment model. Every table is a Delta Lake table in a bronze, silver and gold layout, and the whole project installs with `pip`, with no Maven jars to download.
 
-I built it to get good at big data pipelining, and to understand how ocean freight timing reaches an OTIF number at a distribution center.
-
 ## Pipeline
 
 ```mermaid
