@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
+from aisetl import delta, pipeline
+from aisetl.ingest import bronze
+from aisetl.stream import replay
 from tests.conftest import build_config
-from waybill import delta, pipeline
-from waybill.ingest import bronze
-from waybill.stream import replay
 
 
 @pytest.fixture(scope="module")

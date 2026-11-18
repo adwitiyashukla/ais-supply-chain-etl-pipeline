@@ -2,16 +2,12 @@ from __future__ import annotations
 
 from pyspark.sql import functions as F
 
-from waybill import delta
+from aisetl import delta
 
 LANES = ("gold", "lane_reliability")
 
 
-def lane_reliability(voyage_df, booking_df):
-    planned = booking_df.groupBy("lane").agg(
-        F.expr("round(avg(ocean_delay_hours), 3) as avg_plan_delay_hours"),
-        F.expr("count(*) as containers"),
-    )
+def lane_reliability(voyage_df):
     grouped = voyage_df.groupBy("lane", "from_port", "to_port", "from_port_name", "to_port_name").agg(
         F.expr("count(*) as voyages"),
         F.expr("count(distinct mmsi) as vessels"),
@@ -24,7 +20,7 @@ def lane_reliability(voyage_df, booking_df):
         F.expr("round(avg(anchor_wait_hours), 3) as avg_anchor_wait_hours"),
         F.expr("sum(case when leg_state = 'laden' then 1 else 0 end) as laden_voyages"),
     )
-    scored = grouped.join(planned, "lane", "left").selectExpr(
+    scored = grouped.selectExpr(
         "*",
         "round(coalesce(stddev_sea_hours, 0) / greatest(avg_sea_hours, 0.01), 4) as transit_variability",
         "round(p90_sea_hours - median_sea_hours, 3) as tail_hours",
@@ -33,10 +29,10 @@ def lane_reliability(voyage_df, booking_df):
     return scored.filter("voyages >= 3")
 
 
-def run(cfg, voyage_df, booking_df):
+def run(cfg, voyage_df):
     return {
         "lane_reliability": delta.write(
-            lane_reliability(voyage_df, booking_df), cfg.paths.table(*LANES), None,
+            lane_reliability(voyage_df), cfg.paths.table(*LANES), None,
             "overwrite", "lane_reliability",
         )
     }

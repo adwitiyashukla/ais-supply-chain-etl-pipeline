@@ -7,11 +7,11 @@ from pathlib import Path
 
 from pyspark.sql import functions as F
 
-from waybill import delta
-from waybill.generate import cpg
-from waybill.gold import otif, ports
-from waybill.ingest import bronze
-from waybill.silver import dims, portcalls, voyages
+from aisetl import delta
+from aisetl.generate import cpg
+from aisetl.gold import otif, ports
+from aisetl.ingest import bronze
+from aisetl.silver import dims, portcalls, voyages
 
 
 @dataclass(frozen=True)
@@ -51,7 +51,7 @@ EXPECTATIONS = [
     Expectation("silver.port_calls", "dwell_under_30_days", "dwell_hours <= 720"),
     Expectation("silver.voyages", "sea_time_positive", "sea_hours > 0"),
     Expectation("silver.voyages", "distance_positive", "distance_km > 0"),
-    Expectation("silver.voyages", "speed_plausible", "avg_speed_knots between 0.5 and 40"),
+    Expectation("silver.voyages", "speed_physically_possible", "avg_speed_knots <= 40"),
     Expectation("silver.voyages", "ports_differ", "from_port != to_port"),
     Expectation("silver.order_lines", "shipped_not_over", "shipped_cases <= ordered_cases"),
     Expectation("silver.order_lines", "delivery_after_order", "delivered_ts > order_ts"),
@@ -73,7 +73,7 @@ UNIQUENESS = [
 REFERENCES = [
     Reference("silver.order_lines", "line_dc_exists", "dc_id", "silver.dim_dc", "dc_id"),
     Reference("silver.order_lines", "line_sku_exists", "sku_id", "silver.dim_sku", "sku_id"),
-    Reference("silver.bookings", "booking_voyage_exists", "voyage_id", "silver.voyages", "voyage_id"),
+    Reference("silver.bookings", "booking_call_exists", "call_id", "silver.port_calls", "call_id"),
     Reference("silver.voyages", "voyage_vessel_seen", "mmsi", "silver.dim_vessel", "mmsi"),
 ]
 

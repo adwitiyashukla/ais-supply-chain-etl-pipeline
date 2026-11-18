@@ -3,8 +3,8 @@ from __future__ import annotations
 from pyspark.sql import Window
 from pyspark.sql import functions as F
 
-from waybill import delta
-from waybill.silver.pings import distance_expr
+from aisetl import delta
+from aisetl.silver.pings import distance_expr
 
 CALLS = ("silver", "port_calls")
 
@@ -18,12 +18,16 @@ def sessionize(cfg, area_pings):
             "at_berth",
             F.expr(
                 "sog is not null and sog <= " + str(cfg.ports.berth_speed_knots)
-                + " and distance_km <= " + str(berth_km)
+                + " and (status = 5 or (coalesce(status, -1) not in (1, 5) and distance_km <= "
+                + str(berth_km) + "))"
             ),
         )
         .withColumn(
             "at_anchor",
-            F.expr("sog is not null and sog <= 1.0 and distance_km > " + str(berth_km)),
+            F.expr(
+                "sog is not null and sog <= 1.0 and not at_berth and (status = 1 or distance_km > "
+                + str(berth_km) + ")"
+            ),
         )
     )
     chained = (

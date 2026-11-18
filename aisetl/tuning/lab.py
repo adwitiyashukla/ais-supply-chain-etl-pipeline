@@ -6,9 +6,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from waybill import delta
-from waybill.ingest import bronze
-from waybill.silver import pings
+from aisetl import delta
+from aisetl.ingest import bronze
+from aisetl.silver import pings
 
 STRATEGIES = [
     ("naive_shuffle", "shuffle", {"spark.sql.adaptive.enabled": "false", "spark.sql.autoBroadcastJoinThreshold": "-1"}),

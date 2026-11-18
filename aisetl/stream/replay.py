@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import time
 from pathlib import Path
 
 from pyspark.sql import functions as F
 
-from waybill import delta
-from waybill.ingest import bronze
+from aisetl import delta
+from aisetl.ingest import bronze
 
 STREAM = ("bronze", "ais_stream")
 
@@ -32,26 +33,36 @@ def stage(cfg, days=None):
     staged = []
     for day in selected:
         source = Path(cfg.paths.raw) / "ais" / day
-        for item in sorted(source.glob("*.csv")):
+        for item in sorted(list(source.glob("*.csv")) + list(source.glob("*.parquet"))):
             destination = target / (day + "__" + item.name)
-            destination.symlink_to(item.resolve())
+            try:
+                os.link(item, destination)
+            except OSError:
+                shutil.copy2(item, destination)
             staged.append(destination.name)
     return {"days": selected, "files": len(staged)}
 
 
 def source(spark, cfg):
-    return (
-        spark.readStream.option("header", True)
-        .option("maxFilesPerTrigger", cfg.stream.files_per_trigger)
-        .schema(bronze.RAW_SCHEMA)
-        .csv(str(landing(cfg)))
-        .withColumn("source_file", F.expr("input_file_name()"))
-    )
+    folder = landing(cfg)
+    parquet = sorted(folder.glob("*.parquet"))
+    if parquet:
+        schema = spark.read.parquet(str(parquet[0])).schema
+        reader = spark.readStream.option("maxFilesPerTrigger", cfg.stream.files_per_trigger).schema(schema)
+        frame = reader.option("pathGlobFilter", "*.parquet").parquet(str(folder))
+    else:
+        frame = (
+            spark.readStream.option("header", True)
+            .option("maxFilesPerTrigger", cfg.stream.files_per_trigger)
+            .schema(bronze.RAW_SCHEMA)
+            .csv(str(folder))
+        )
+    return frame.withColumn("source_file", F.expr("input_file_name()"))
 
 
 def prepared(cfg, raw):
-    day_expr = "regexp_extract(input_file_name(), '" + DAY_PATTERN + "', 1)"
-    marked = bronze.flagged(bronze.typed(raw, day_expr))
+    day_expr = "regexp_extract(source_file, '" + DAY_PATTERN + "', 1)"
+    marked = bronze.flagged(bronze.typed_any(raw, day_expr))
     accepted = (
         marked.filter("reject_reason is null")
         .drop("reject_reason", "raw_mmsi", "raw_base_datetime", "raw_lat", "raw_lon")

@@ -3,8 +3,8 @@ from __future__ import annotations
 from pyspark.sql import Window
 from pyspark.sql import functions as F
 
-from waybill import reference
-from waybill.generate import ais
+from aisetl import reference
+from aisetl.generate import ais
 
 
 def test_every_vessel_has_a_unique_mmsi(spark, cfg):

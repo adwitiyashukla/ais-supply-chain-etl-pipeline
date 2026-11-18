@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pyspark.sql import functions as F
 
-from waybill import delta
+from aisetl import delta
 
 DAILY = ("gold", "otif_daily")
 SERVICE = ("gold", "customer_service")
@@ -49,6 +49,7 @@ def import_impact(line_df):
         "delay_bucket",
         F.expr(
             "case when not import_linked then 'domestic'"
+            " when unserved then 'supply_short'"
             " when slack_hours is null then 'no_container'"
             " when slack_hours < -24 then 'container_late_24h_plus'"
             " when slack_hours < 0 then 'container_late_0_24h'"
@@ -61,7 +62,6 @@ def import_impact(line_df):
         F.expr("sum(case when otif then 1 else 0 end) as otif_lines"),
         F.expr("sum(case when on_time then 1 else 0 end) as on_time_lines"),
         F.expr("sum(ordered_cases - shipped_cases) as cases_short"),
-        F.expr("round(avg(coalesce(ocean_delay_hours, 0)), 2) as avg_ocean_delay_hours"),
         F.expr("round(avg(coalesce(port_wait_hours, 0)), 2) as avg_port_wait_hours"),
         F.expr("round(avg(delivery_variance_days), 3) as avg_variance_days"),
         F.expr("sum(case when allocation_late then 1 else 0 end) as allocation_late_lines"),

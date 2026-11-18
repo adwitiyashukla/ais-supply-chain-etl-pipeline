@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from waybill.silver import dims, pings, portcalls
+from aisetl.silver import dims, pings, portcalls
 
 PORT_LAT = 33.7290
 PORT_LON = -118.2620
@@ -11,7 +11,9 @@ START = datetime(2024, 1, 1, tzinfo=timezone.utc)
 
 def ping_rows(offsets):
     rows = []
-    for minutes, lat_delta, lon_delta, sog in offsets:
+    for entry in offsets:
+        minutes, lat_delta, lon_delta, sog = entry[:4]
+        status = entry[4] if len(entry) > 4 else 0
         moment = START + timedelta(minutes=minutes)
         rows.append(
             (
@@ -26,7 +28,7 @@ def ping_rows(offsets):
                 "IMO9000001",
                 "WTEST1",
                 70,
-                5,
+                status,
                 200.0,
                 30.0,
                 9.5,
@@ -54,11 +56,11 @@ def frame(spark, offsets):
 def approach_and_berth(base_minutes):
     steps = []
     for index in range(4):
-        steps.append((base_minutes + index * 5, 0.18, 0.0, 12.0))
+        steps.append((base_minutes + index * 5, 0.18, 0.0, 12.0, 0))
     for index in range(6):
-        steps.append((base_minutes + 20 + index * 10, 0.09, 0.0, 0.3))
+        steps.append((base_minutes + 20 + index * 10, 0.09, 0.0, 0.3, 1))
     for index in range(12):
-        steps.append((base_minutes + 80 + index * 10, 0.004, 0.0, 0.05))
+        steps.append((base_minutes + 80 + index * 10, 0.004, 0.0, 0.05, 5))
     return steps
 
 
@@ -95,6 +97,14 @@ def test_a_long_gap_starts_a_second_call(spark, cfg):
     calls = portcalls.port_calls(cfg, area)
     assert calls.count() == 2
     assert calls.select("call_id").distinct().count() == 2
+
+
+def test_a_moored_ship_far_from_the_port_center_still_berths(spark, cfg):
+    offsets = [(index * 10, 0.075, 0.0, 0.1, 5) for index in range(12)]
+    area = pings.port_area_pings(spark, cfg, frame(spark, offsets))
+    calls = portcalls.port_calls(cfg, area).collect()
+    assert len(calls) == 1
+    assert calls[0]["berth_pings"] == 12
 
 
 def test_a_short_stop_is_not_a_port_call(spark, cfg):
@@ -180,7 +190,7 @@ def call_row(identifier, port, arrival, departure, draft_in, draft_out, move):
 def test_voyages_link_consecutive_calls(spark, cfg):
     from datetime import datetime
 
-    from waybill.silver import voyages
+    from aisetl.silver import voyages
 
     calls = spark.createDataFrame(
         [
@@ -203,7 +213,7 @@ def test_voyages_link_consecutive_calls(spark, cfg):
 def test_a_ballast_leg_is_marked_from_the_departure_draft(spark, cfg):
     from datetime import datetime
 
-    from waybill.silver import voyages
+    from aisetl.silver import voyages
 
     calls = spark.createDataFrame(
         [

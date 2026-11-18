@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from waybill.generate import cpg
+from aisetl.generate import cpg
 
 LINE_SCHEMA = (
     "line_id string, order_id string, line_no int, order_ts timestamp, order_date date,"
@@ -10,8 +10,8 @@ LINE_SCHEMA = (
 )
 
 BOOKING_SCHEMA = (
-    "dc_id string, sku_id string, booking_id string, voyage_id string, lane string, mmsi long,"
-    " ocean_delay_hours double, anchor_wait_hours double, available_ts timestamp, cases int"
+    "dc_id string, sku_id string, booking_id string, call_id string, mmsi long,"
+    " anchor_wait_hours double, available_ts timestamp, cases int"
 )
 
 
@@ -44,7 +44,7 @@ def line(identifier, sku, imported):
 def booking(sku, moment, identifier):
     from datetime import datetime
 
-    return ("DC001", sku, identifier, "V1", "USLAX>USOAK", 366100001, 6.0, 3.0, datetime(*moment), 500)
+    return ("DC001", sku, identifier, "C1", 366100001, 3.0, datetime(*moment), 500)
 
 
 def frames(spark):

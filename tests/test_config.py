@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+from aisetl.config import Config, ConfigError
 from tests.conftest import BASE, build_config
-from waybill.config import Config, ConfigError
 
 
 def test_dates_cover_the_window(tmp_path):
@@ -46,6 +46,16 @@ def test_tuning_days_cannot_exceed_window(tmp_path):
 def test_dedupe_window_cannot_exceed_watermark(tmp_path):
     with pytest.raises(ConfigError, match="dedupe_minutes"):
         build_config(tmp_path, stream={"dedupe_minutes": 500})
+
+
+def test_keep_raw_days_cannot_exceed_the_window(tmp_path):
+    with pytest.raises(ConfigError, match="keep_raw_days"):
+        build_config(tmp_path, ais={"keep_raw_days": 9})
+
+
+def test_streaming_needs_its_raw_days_when_reading_files(tmp_path):
+    with pytest.raises(ConfigError, match="keep_raw_days"):
+        build_config(tmp_path, ais={"source": "files", "keep_raw_days": 0}, stream={"days": 1})
 
 
 def test_table_paths_sit_under_the_lake(tmp_path):

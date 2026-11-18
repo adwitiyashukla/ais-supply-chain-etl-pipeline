@@ -6,8 +6,9 @@ from pathlib import Path
 from pyspark.sql import functions as F
 from pyspark.sql.types import StringType, StructField, StructType
 
-from waybill import delta
-from waybill.generate.ais import AIS_COLUMNS
+from aisetl import delta
+from aisetl.generate.ais import AIS_COLUMNS
+from aisetl.ingest import geoparquet
 
 RAW_SCHEMA = StructType([StructField(name, StringType(), True) for name in AIS_COLUMNS])
 
@@ -22,14 +23,27 @@ def source_directory(cfg, day):
     return str(Path(cfg.paths.raw) / "ais" / day)
 
 
+def source_format(directory):
+    return "parquet" if any(Path(directory).glob("*.parquet")) else "csv"
+
+
 def read_raw(spark, cfg, day):
+    directory = source_directory(cfg, day)
+    if source_format(directory) == "parquet":
+        return spark.read.parquet(directory).withColumn("source_file", F.expr("input_file_name()"))
     return (
         spark.read.option("header", True)
         .option("mode", "PERMISSIVE")
         .schema(RAW_SCHEMA)
-        .csv(source_directory(cfg, day))
+        .csv(directory)
         .withColumn("source_file", F.expr("input_file_name()"))
     )
+
+
+def typed_any(raw, day_expr):
+    if "geometry" in raw.columns:
+        return geoparquet.typed(geoparquet.decode_points(raw), day_expr)
+    return typed(raw, day_expr)
 
 
 def typed(df, day_expr):
@@ -79,7 +93,7 @@ def ingest_day(spark, cfg, day):
     started = time.time()
     raw = read_raw(spark, cfg, day)
     rows_read = raw.count()
-    marked = flagged(typed(raw, "'" + day + "'"))
+    marked = flagged(typed_any(raw, "'" + day + "'"))
     accepted = (
         marked.filter("reject_reason is null")
         .drop("reject_reason", "raw_mmsi", "raw_base_datetime", "raw_lat", "raw_lon")

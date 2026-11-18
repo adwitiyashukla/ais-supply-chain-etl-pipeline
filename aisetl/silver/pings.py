@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pyspark.sql import functions as F
 
-from waybill import delta, reference
+from aisetl import delta, reference
 
 PINGS = ("silver", "port_area_pings")
 VESSEL_DAYS = ("silver", "vessel_days")

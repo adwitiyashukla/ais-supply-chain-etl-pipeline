@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pyspark.sql import functions as F
 
-from waybill import delta
+from aisetl import delta
 
 PERFORMANCE = ("gold", "port_performance")
 CONGESTION = ("gold", "port_congestion_daily")

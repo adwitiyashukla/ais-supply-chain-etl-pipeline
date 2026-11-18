@@ -4,12 +4,12 @@ import argparse
 import json
 import sys
 
-from waybill import pipeline
-from waybill.config import Config
+from aisetl import pipeline
+from aisetl.config import Config
 
 
 def parse(argv):
-    parser = argparse.ArgumentParser(prog="waybill")
+    parser = argparse.ArgumentParser(prog="aisetl")
     parser.add_argument(
         "stage", choices=sorted(pipeline.STAGES) + ["pipeline"], help="stage to run"
     )

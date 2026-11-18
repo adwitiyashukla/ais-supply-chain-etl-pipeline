@@ -84,6 +84,7 @@ class Window:
 class AisSettings:
     source: str
     url_template: str
+    keep_raw_days: int
     vessels: int
     ping_interval_seconds: int
     class_b_share: float
@@ -102,6 +103,7 @@ class CpgSettings:
     orders_per_day: int
     max_lines_per_order: int
     import_share: float
+    containers_per_call: int
     promised_transit_days: int
     inland_transit_hours: float
 
@@ -204,6 +206,7 @@ class Config:
         ais = AisSettings(
             source=source,
             url_template=template,
+            keep_raw_days=_get(ais_raw, "keep_raw_days", int, "ais"),
             vessels=_positive(ais_raw, "vessels", "ais"),
             ping_interval_seconds=_positive(ais_raw, "ping_interval_seconds", "ais"),
             class_b_share=_ratio(ais_raw, "class_b_share", "ais"),
@@ -213,6 +216,8 @@ class Config:
             late_share=_ratio(ais_raw, "late_share", "ais"),
         )
         _need(ais.ping_interval_seconds <= 3600, "[ais].ping_interval_seconds must be 3600 or fewer")
+        _need(0 <= ais.keep_raw_days <= window.days,
+              "[ais].keep_raw_days must be between 0 and [window].days (" + str(window.days) + ")")
 
         cpg_raw = _section(raw, "cpg")
         cpg = CpgSettings(
@@ -223,10 +228,12 @@ class Config:
             orders_per_day=_positive(cpg_raw, "orders_per_day", "cpg"),
             max_lines_per_order=_positive(cpg_raw, "max_lines_per_order", "cpg"),
             import_share=_ratio(cpg_raw, "import_share", "cpg"),
+            containers_per_call=_positive(cpg_raw, "containers_per_call", "cpg"),
             promised_transit_days=_positive(cpg_raw, "promised_transit_days", "cpg"),
             inland_transit_hours=_positive(cpg_raw, "inland_transit_hours", "cpg", float),
         )
         _need(cpg.max_lines_per_order <= 20, "[cpg].max_lines_per_order must be 20 or fewer")
+        _need(cpg.containers_per_call <= 1000, "[cpg].containers_per_call must be 1000 or fewer")
 
         ports_raw = _section(raw, "ports")
         ports = PortSettings(
@@ -259,6 +266,8 @@ class Config:
               "[stream].dedupe_minutes must not exceed [stream].watermark_minutes")
         _need(stream.days <= window.days,
               "[stream].days must not exceed [window].days (" + str(window.days) + ")")
+        _need(ais.source != "files" or stream.days <= ais.keep_raw_days,
+              "[stream].days must not exceed [ais].keep_raw_days when [ais].source is files")
 
         tuning_raw = _section(raw, "tuning")
         tuning = TuningSettings(

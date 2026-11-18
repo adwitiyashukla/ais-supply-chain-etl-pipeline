@@ -3,7 +3,7 @@ from __future__ import annotations
 from pyspark.sql import Window
 from pyspark.sql import functions as F
 
-from waybill import delta, reference
+from aisetl import delta, reference
 
 VESSELS = ("silver", "dim_vessel")
 

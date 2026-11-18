@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 
 from pyspark.sql import SparkSession
 
 
 def build(cfg, app_name, overrides=None):
+    os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
     Path(cfg.paths.tmp).mkdir(parents=True, exist_ok=True)
     builder = (
         SparkSession.builder.master(cfg.spark.master)

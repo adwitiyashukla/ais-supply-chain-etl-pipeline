@@ -6,13 +6,13 @@ from pathlib import Path
 import pytest
 from pyspark.sql import functions as F
 
+from aisetl import delta, pipeline
+from aisetl.generate import cpg
+from aisetl.gold import otif, ports
+from aisetl.ingest import bronze
+from aisetl.quality import checks
+from aisetl.silver import dims, portcalls
 from tests.conftest import build_config
-from waybill import delta, pipeline
-from waybill.generate import cpg
-from waybill.gold import otif, ports
-from waybill.ingest import bronze
-from waybill.quality import checks
-from waybill.silver import dims, portcalls, voyages
 
 
 @pytest.fixture(scope="module")
@@ -49,11 +49,12 @@ def test_quality_report_is_written_to_disk(built):
     assert {item["status"] for item in payload["results"]} == {"pass"}
 
 
-def test_bookings_only_reference_real_voyages(spark, built):
+def test_bookings_only_reference_real_port_calls(spark, built):
     cfg, _ = built
-    legs = delta.read(spark, cfg.paths.table(*voyages.VOYAGES)).select("voyage_id")
-    books = delta.read(spark, cfg.paths.table(*cpg.BOOKINGS)).select("voyage_id").dropDuplicates()
-    assert books.join(legs, "voyage_id", "left_anti").count() == 0
+    calls = delta.read(spark, cfg.paths.table(*portcalls.CALLS)).select("call_id")
+    books = delta.read(spark, cfg.paths.table(*cpg.BOOKINGS)).select("call_id").dropDuplicates()
+    assert books.count() > 0
+    assert books.join(calls, "call_id", "left_anti").count() == 0
 
 
 def test_port_calls_sit_inside_the_generated_window(spark, built):

@@ -6,7 +6,7 @@ from pathlib import Path
 from pyspark.sql import Window
 from pyspark.sql import functions as F
 
-from waybill import reference
+from aisetl import reference
 
 AIS_COLUMNS = [
     "MMSI",

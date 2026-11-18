@@ -17,11 +17,11 @@ log_level = "ERROR"
 
 [window]
 start_date = "2024-01-01"
-days = 7
+days = 3
 
 [ais]
-source = "generated"
-url_template = "https://coast.noaa.gov/htdata/CMSP/AISDataHandler/{year}/AIS_{year}_{month}_{day}.zip"
+source = "files"
+url_template = "https://ocmgeodatastor1.blob.core.windows.net/marinecadastre/ais{year}/ais-{year}-{month}-{day}.parquet"
 vessels = 6000
 ping_interval_seconds = 80
 class_b_share = 0.34
@@ -29,6 +29,7 @@ gap_share = 0.03
 duplicate_rate = 0.004
 corrupt_rate = 0.003
 late_share = 0.02
+keep_raw_days = 1
 
 [cpg]
 plants = 12
@@ -38,6 +39,7 @@ skus = 500
 orders_per_day = 120000
 max_lines_per_order = 4
 import_share = 0.28
+containers_per_call = 60
 promised_transit_days = 5
 inland_transit_hours = 34.0
 
@@ -55,14 +57,14 @@ max_quarantine_rate = 0.05
 fail_on_error = true
 
 [stream]
-files_per_trigger = 2
+files_per_trigger = 1
 watermark_minutes = 120
 trigger_seconds = 5
 dedupe_minutes = 30
-days = 2
+days = 1
 
 [tuning]
 enabled = true
-sample_days = 2
+sample_days = 1
 salt_buckets = 24
 naive_shuffle_partitions = 200

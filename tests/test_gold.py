@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from datetime import date
 
-from waybill.gold import inventory, lanes, otif, ports
+from aisetl.gold import inventory, lanes, otif, ports
 
 LINE_SCHEMA = (
     "line_id string, order_id string, customer_id string, channel string, account_tier string,"
     " customer_region string, dc_id string, sku_id string, category string, delivered_date date,"
     " ordered_cases int, shipped_cases int, shipped_value_usd double, delivery_variance_days int,"
     " on_time boolean, in_full boolean, otif boolean, import_linked boolean,"
-    " ocean_delay_hours double, port_wait_hours double, allocation_late boolean,"
+    " port_wait_hours double, allocation_late boolean,"
     " unserved boolean, slack_hours double"
 )
 
@@ -34,7 +34,6 @@ def make_line(identifier, on_time, in_full, imported, delay):
         in_full,
         on_time and in_full,
         imported,
-        delay,
         3.0,
         bool(delay is not None and delay > 12),
         False,
@@ -63,7 +62,7 @@ def test_otif_rate_matches_the_lines(spark, cfg):
     assert float(row["case_fill_rate"]) == round(360 / 400, 4)
 
 
-def test_import_impact_splits_by_ocean_delay(spark, cfg):
+def test_import_impact_splits_by_container_slack(spark, cfg):
     rows = {row["delay_bucket"]: row for row in otif.import_impact(lines(spark)).collect()}
     assert set(rows) == {"domestic", "slack_48h_plus", "container_late_0_24h"}
     assert float(rows["container_late_0_24h"]["otif_rate"]) == 0.0
@@ -87,10 +86,7 @@ def test_lane_reliability_needs_three_voyages(spark, cfg):
         " to_port_name string, lane string, sea_hours double, anchor_wait_hours double,"
         " distance_km double, avg_speed_knots double, leg_state string",
     )
-    bookings = spark.createDataFrame(
-        [("B1", "USLAX>USOAK", 3.0)], "booking_id string, lane string, ocean_delay_hours double"
-    )
-    row = lanes.lane_reliability(voyages, bookings).collect()[0]
+    row = lanes.lane_reliability(voyages).collect()[0]
     assert row["voyages"] == 4
     assert row["vessels"] == 4
     assert float(row["laden_share"]) == 1.0

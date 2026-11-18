@@ -9,8 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from waybill import session  # noqa: E402
-from waybill.config import Config  # noqa: E402
+from aisetl import session  # noqa: E402
+from aisetl.config import Config  # noqa: E402
 
 BASE = {
     "paths": {
@@ -34,6 +34,7 @@ BASE = {
     "ais": {
         "source": "generated",
         "url_template": "https://example.org/{year}/AIS_{year}_{month}_{day}.zip",
+        "keep_raw_days": 1,
         "vessels": 40,
         "ping_interval_seconds": 120,
         "class_b_share": 0.3,
@@ -44,12 +45,13 @@ BASE = {
     },
     "cpg": {
         "plants": 3,
-        "distribution_centers": 4,
+        "distribution_centers": 13,
         "customers": 12,
         "skus": 20,
         "orders_per_day": 40,
         "max_lines_per_order": 3,
         "import_share": 0.3,
+        "containers_per_call": 20,
         "promised_transit_days": 5,
         "inland_transit_hours": 34.0,
     },
@@ -94,7 +96,7 @@ def build_config(tmp_path, **overrides):
 @pytest.fixture(scope="session")
 def spark():
     cfg = Config.from_dict(BASE)
-    active = session.build(cfg, "waybill-tests")
+    active = session.build(cfg, "aisetl-tests")
     yield active
     active.stop()
 

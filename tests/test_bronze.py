@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from waybill import delta
-from waybill.generate import ais
-from waybill.ingest import bronze
+from aisetl import delta
+from aisetl.generate import ais
+from aisetl.ingest import bronze
 
 
 def prepare(spark, cfg):
@@ -13,7 +13,7 @@ def prepare(spark, cfg):
 
 
 def reference_ports(spark):
-    from waybill import reference
+    from aisetl import reference
 
     return reference.ports(spark)
 

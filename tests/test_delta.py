@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from waybill import delta
+from aisetl import delta
 
 
 @pytest.fixture

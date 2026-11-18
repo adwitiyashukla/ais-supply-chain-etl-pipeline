@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from pyspark.sql import Window
 from pyspark.sql import functions as F
 
-from waybill import delta, reference
-from waybill.generate.ais import array_literal, rnd, tag
+from aisetl import delta, reference
+from aisetl.generate.ais import array_literal, rnd, tag
 
 PLANTS = ("silver", "dim_plant")
 CENTERS = ("silver", "dim_dc")
@@ -41,8 +41,8 @@ def centers(spark, cfg, gateway_ports):
         "concat('DC', lpad(cast(id + 1 as string), 3, '0')) as dc_id",
         "element_at(" + array_literal(REGIONS) + ", 1 + pmod(hash(id, 'region'), " + str(len(REGIONS))
         + ")) as region",
-        "element_at(" + array_literal(gateway_ports) + ", 1 + pmod(hash(id, 'port'), " + str(count)
-        + ")) as inbound_port",
+        "element_at(" + array_literal(gateway_ports) + ", cast(1 + pmod(id, " + str(count)
+        + ") as int)) as inbound_port",
         "cast(120000 + pmod(hash(id, 'slots'), 380000) as int) as case_capacity",
     )
 
@@ -72,71 +72,54 @@ def skus(spark, cfg):
     )
 
 
-def lane_plan(voyages):
-    grouped = voyages.groupBy("lane").agg(
-        F.expr("count(*) as lane_voyages"),
-        F.expr("cast(percentile_approx(sea_hours, 0.5) as double) as lane_median_hours"),
+def bookings(cfg, calls, vessel_df, center_df, sku_df):
+    cargo = vessel_df.filter("is_current and category = 'cargo'").select("mmsi").dropDuplicates()
+    arrivals = calls.filter("gateway").join(F.broadcast(cargo), "mmsi")
+    count = cfg.cpg.containers_per_call
+    spread = count // 2
+    per_call = arrivals.withColumn(
+        "container_idx",
+        F.explode(
+            F.expr(
+                "sequence(0, cast(" + str(count - spread) + " + pmod(hash(call_id, 'boxes'), "
+                + str(2 * spread + 1) + ") as int) - 1)"
+            )
+        ),
     )
-    return grouped.selectExpr(
-        "lane",
-        "lane_voyages",
-        "case when lane_voyages >= 3 then lane_median_hours end as lane_median_hours",
-    )
-
-
-def bookings(cfg, voyages, center_df, sku_df):
-    laden = voyages.filter("leg_state = 'laden' and to_gateway").join(
-        F.broadcast(lane_plan(voyages)), "lane", "left"
-    )
-    per_voyage = laden.withColumn(
-        "container_idx", F.explode(F.expr("sequence(0, cast(11 + pmod(hash(voyage_id), 25) as int))"))
-    )
-    keyed = per_voyage.selectExpr(
+    keyed = per_call.selectExpr(
         "*",
-        "concat_ws('-', voyage_id, cast(container_idx as string)) as booking_id",
-        "to_port as inbound_port",
-        "cast(round(coalesce(lane_median_hours, distance_km / 1.852 / 15.5 + 18), 2) as double)"
-        " as planned_sea_hours",
+        "concat_ws('-', call_id, cast(container_idx as string)) as booking_id",
+        "port_id as inbound_port",
     )
-    with_dc = keyed.join(
-        F.broadcast(center_df.selectExpr("dc_id", "inbound_port", "region as dc_region")), "inbound_port"
+    port_centers = center_df.groupBy("inbound_port").agg(F.expr("sort_array(collect_list(dc_id)) as centers"))
+    with_dc = keyed.join(F.broadcast(port_centers), "inbound_port").withColumn(
+        "dc_id", F.expr("element_at(centers, 1 + pmod(hash(booking_id, 'dc'), size(centers)))")
     )
     imports = sku_df.filter("import_sourced").select("sku_id", "category")
-    allocated = with_dc.withColumn(
-        "sku_slot", F.expr("pmod(hash(booking_id, dc_id, 'sku'), " + str(1 << 30) + ")")
-    )
-    numbered = imports.withColumn(
-        "sku_index", F.expr("row_number() over (order by sku_id) - 1")
-    )
+    numbered = imports.withColumn("sku_index", F.expr("row_number() over (order by sku_id) - 1"))
     sku_count = numbered.count()
-    joined = allocated.withColumn(
-        "sku_index", F.expr("pmod(sku_slot, " + str(max(sku_count, 1)) + ")")
+    joined = with_dc.withColumn(
+        "sku_index", F.expr("pmod(hash(booking_id, dc_id, 'sku'), " + str(max(sku_count, 1)) + ")")
     ).join(F.broadcast(numbered), "sku_index")
-    return joined.selectExpr(
+    timed = joined.selectExpr(
         "booking_id",
-        "voyage_id",
+        "call_id",
         "mmsi",
-        "from_port",
-        "to_port",
-        "lane",
+        "port_id",
         "dc_id",
         "sku_id",
         "category",
-        "departed_ts",
-        "timestamp_seconds(unix_timestamp(departed_ts) + cast(planned_sea_hours * 3600 as bigint))"
-        " as planned_arrival_ts",
-        "arrival_ts as actual_arrival_ts",
+        "arrival_ts",
         "berth_start_ts",
         "anchor_wait_hours",
-        "sea_hours",
-        "cast(round(sea_hours - planned_sea_hours, 3) as double) as ocean_delay_hours",
         "cast(1500 + pmod(hash(booking_id, 'cases'), 2500) as int) as cases",
         "round(6 + " + rnd("booking_id", tag("disch")) + " * 20, 2) as discharge_hours",
-    ).selectExpr(
+    )
+    lead = "(discharge_hours + " + str(cfg.cpg.inland_transit_hours) + ") * 3600"
+    return timed.selectExpr(
         "*",
-        "timestamp_seconds(unix_timestamp(berth_start_ts)"
-        " + cast((discharge_hours + " + str(cfg.cpg.inland_transit_hours) + ") * 3600 as bigint))"
-        " as available_ts",
+        "timestamp_seconds(unix_timestamp(arrival_ts) + cast(" + lead + " as bigint)) as planned_available_ts",
+        "timestamp_seconds(unix_timestamp(berth_start_ts) + cast(" + lead + " as bigint)) as available_ts",
     )
 
 
@@ -242,8 +225,8 @@ def fulfilment(cfg, lines, booking_df):
     supply = booking_df.withColumn("cumulative_supply", F.sum("cases").over(arrivals))
     slots = supply.groupBy("dc_id", "sku_id").agg(
         F.expr(
-            "sort_array(collect_list(struct(cumulative_supply, available_ts, booking_id, voyage_id,"
-            " lane, mmsi, ocean_delay_hours, anchor_wait_hours))) as slots"
+            "sort_array(collect_list(struct(cumulative_supply, available_ts, booking_id, call_id,"
+            " mmsi, anchor_wait_hours))) as slots"
         )
     )
     joined = demand.join(F.broadcast(slots), ["dc_id", "sku_id"], "left")
@@ -276,10 +259,8 @@ def fulfilment(cfg, lines, booking_df):
         "*",
         "cast(delivered_ts as date) as delivered_date",
         "slot.booking_id as booking_id",
-        "slot.voyage_id as voyage_id",
-        "slot.lane as lane",
+        "slot.call_id as call_id",
         "slot.mmsi as mmsi",
-        "slot.ocean_delay_hours as ocean_delay_hours",
         "slot.anchor_wait_hours as port_wait_hours",
         "slot is not null as import_linked",
         "case when slot is not null then"
@@ -307,10 +288,8 @@ def fulfilment(cfg, lines, booking_df):
         "import_linked",
         "unserved",
         "booking_id",
-        "voyage_id",
-        "lane",
+        "call_id",
         "mmsi",
-        "ocean_delay_hours",
         "port_wait_hours",
         "round(slack_hours, 2) as slack_hours",
         "allocation_late",
@@ -356,7 +335,6 @@ def shipments(line_df):
         F.expr("round(sum(shipped_cases * case_weight_kg), 1) as shipped_weight_kg"),
         F.expr("max(import_linked) as import_linked"),
         F.expr("max(allocation_late) as allocation_late"),
-        F.expr("max(coalesce(ocean_delay_hours, 0)) as ocean_delay_hours"),
         F.expr("max(coalesce(port_wait_hours, 0)) as port_wait_hours"),
         F.expr("min(case when otif then 1 else 0 end) as otif_flag"),
         F.expr("min(case when on_time then 1 else 0 end) as on_time_flag"),
@@ -384,7 +362,6 @@ def shipments(line_df):
         "shipped_weight_kg",
         "import_linked",
         "allocation_late",
-        "round(ocean_delay_hours, 2) as ocean_delay_hours",
         "round(port_wait_hours, 2) as port_wait_hours",
         "otif_flag = 1 as otif",
         "on_time_flag = 1 as on_time",
@@ -454,14 +431,14 @@ def inventory(cfg, line_df, booking_df):
     )
 
 
-def run(spark, cfg, voyage_df):
+def run(spark, cfg, call_df, vessel_df):
     ports = reference.ports(spark)
     gateway_ports = [row["port_id"] for row in ports.filter("gateway").select("port_id").collect()]
     plant_df = plants(spark, cfg)
     center_df = centers(spark, cfg, gateway_ports)
     customer_df = customers(spark, cfg)
     sku_df = skus(spark, cfg)
-    booking_df = bookings(cfg, voyage_df, center_df, sku_df).cache()
+    booking_df = bookings(cfg, call_df, vessel_df, center_df, sku_df).cache()
     order_df = orders(spark, cfg, customer_df, center_df)
     line_df = fulfilment(cfg, order_lines(cfg, order_df, sku_df), booking_df).cache()
     shipment_df = shipments(line_df).cache()

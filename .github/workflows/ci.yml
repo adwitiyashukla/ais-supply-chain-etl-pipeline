@@ -54,23 +54,23 @@ jobs:
           AIRFLOW_HOME: ${{ runner.temp }}/airflow
           AIRFLOW__CORE__LOAD_EXAMPLES: "False"
           AIRFLOW__CORE__DAGS_FOLDER: ${{ github.workspace }}/dags
-          WAYBILL_CONFIG: ${{ runner.temp }}/ci.toml
+          AISETL_CONFIG: ${{ runner.temp }}/ci.toml
         run: |
           python - <<'PY'
           import os, pathlib, tomllib
           raw = pathlib.Path("config.toml").read_text()
+          raw = raw.replace('source = "files"', 'source = "generated"')
           raw = raw.replace("vessels = 6000", "vessels = 60")
-          raw = raw.replace("days = 7", "days = 2")
+          raw = raw.replace("days = 3", "days = 2")
           raw = raw.replace("orders_per_day = 120000", "orders_per_day = 200")
           raw = raw.replace('master = "local[*]"', 'master = "local[2]"')
           raw = raw.replace('driver_memory = "4g"', 'driver_memory = "2g"')
-          raw = raw.replace("sample_days = 2", "sample_days = 1")
-          target = pathlib.Path(os.environ["WAYBILL_CONFIG"])
+          target = pathlib.Path(os.environ["AISETL_CONFIG"])
           target.write_text(raw)
           tomllib.loads(raw)
           PY
           airflow db migrate
-          airflow dags test waybill 2024-01-01
+          airflow dags test aisetl 2024-01-01
 
   delta-interop:
     runs-on: ubuntu-latest
@@ -90,34 +90,34 @@ jobs:
           pip install delta-spark==4.0.0
       - name: build a small lake
         env:
-          WAYBILL_CONFIG: ${{ runner.temp }}/ci.toml
+          AISETL_CONFIG: ${{ runner.temp }}/ci.toml
         run: |
           python - <<'PY'
           import os, pathlib
           raw = pathlib.Path("config.toml").read_text()
+          raw = raw.replace('source = "files"', 'source = "generated"')
           raw = raw.replace("vessels = 6000", "vessels = 60")
-          raw = raw.replace("days = 7", "days = 2")
+          raw = raw.replace("days = 3", "days = 2")
           raw = raw.replace("orders_per_day = 120000", "orders_per_day = 200")
           raw = raw.replace('master = "local[*]"', 'master = "local[2]"')
           raw = raw.replace('driver_memory = "4g"', 'driver_memory = "2g"')
-          raw = raw.replace("sample_days = 2", "sample_days = 1")
-          pathlib.Path(os.environ["WAYBILL_CONFIG"]).write_text(raw)
+          pathlib.Path(os.environ["AISETL_CONFIG"]).write_text(raw)
           PY
-          python -m waybill.cli generate --config "$WAYBILL_CONFIG"
-          python -m waybill.cli pipeline --config "$WAYBILL_CONFIG"
+          python -m aisetl.cli generate --config "$AISETL_CONFIG"
+          python -m aisetl.cli pipeline --config "$AISETL_CONFIG"
       - name: read the tables with the delta spark connector
         env:
-          WAYBILL_CONFIG: ${{ runner.temp }}/ci.toml
+          AISETL_CONFIG: ${{ runner.temp }}/ci.toml
         run: |
           python - <<'PY'
           import os
           from delta import configure_spark_with_delta_pip
           from pyspark.sql import SparkSession
-          from waybill import delta
-          from waybill.config import Config
-          from waybill.ingest import bronze
-          from waybill.silver import portcalls, voyages
-          cfg = Config.load(os.environ["WAYBILL_CONFIG"])
+          from aisetl import delta
+          from aisetl.config import Config
+          from aisetl.ingest import bronze
+          from aisetl.silver import portcalls, voyages
+          cfg = Config.load(os.environ["AISETL_CONFIG"])
           builder = (
               SparkSession.builder.master("local[2]")
               .appName("delta-interop")

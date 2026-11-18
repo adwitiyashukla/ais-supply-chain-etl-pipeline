@@ -3,8 +3,8 @@ from __future__ import annotations
 from pyspark.sql import Window
 from pyspark.sql import functions as F
 
-from waybill import delta, reference
-from waybill.silver.pings import distance_expr
+from aisetl import delta, reference
+from aisetl.silver.pings import distance_expr
 
 VOYAGES = ("silver", "voyages")
 

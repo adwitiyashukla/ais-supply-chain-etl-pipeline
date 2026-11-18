@@ -12,13 +12,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from waybill import pipeline  # noqa: E402
-from waybill.config import Config  # noqa: E402
+from aisetl import pipeline  # noqa: E402
+from aisetl.config import Config  # noqa: E402
 
-CONFIG = os.environ.get("WAYBILL_CONFIG", str(ROOT / "config.toml"))
+CONFIG = os.environ.get("AISETL_CONFIG", str(ROOT / "config.toml"))
+
+SOURCE_TASK = "land" if Config.load(CONFIG).ais.source == "files" else "generate"
 
 DEFAULTS = {
-    "owner": "waybill",
+    "owner": "aisetl",
     "retries": 1,
     "retry_delay": timedelta(minutes=2),
     "depends_on_past": False,
@@ -42,7 +44,7 @@ def task(dag, stage):
 
 
 with DAG(
-    dag_id="waybill",
+    dag_id="aisetl",
     description="AIS to supply chain lakehouse",
     default_args=DEFAULTS,
     start_date=datetime(2024, 1, 1),
@@ -50,10 +52,10 @@ with DAG(
     schedule="@daily",
     catchup=False,
     max_active_runs=1,
-    tags=["waybill", "spark", "delta"],
+    tags=["aisetl", "spark", "delta"],
 ) as dag:
-    generate = task(dag, "generate")
-    bronze = task(dag, "bronze")
+    source = task(dag, SOURCE_TASK)
+    bronze = task(dag, "bronze") if SOURCE_TASK == "generate" else None
     silver_pings = task(dag, "silver_pings")
     port_calls = task(dag, "port_calls")
     legs = task(dag, "voyages")
@@ -65,9 +67,12 @@ with DAG(
     tuning = task(dag, "tuning")
     upkeep = task(dag, "maintenance")
 
-    generate >> bronze
-    bronze >> silver_pings >> port_calls >> legs >> orders >> marts >> gate
-    bronze >> vessel_dim >> orders
-    bronze >> stream
-    bronze >> tuning
+    landed = bronze if bronze is not None else source
+    if bronze is not None:
+        source >> bronze
+    landed >> silver_pings >> port_calls >> legs >> marts
+    port_calls >> orders >> marts >> gate
+    landed >> vessel_dim >> orders
+    landed >> stream
+    landed >> tuning
     gate >> upkeep
